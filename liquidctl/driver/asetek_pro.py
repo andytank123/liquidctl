@@ -231,7 +231,24 @@ class CorsairAsetekProDriver(_CommonAsetekDriver):
                 self._write([_PRO_CMD_WRITE_FAN_SPEED, i, duty])
                 self._end_transaction_and_read(32)
         elif channel == 'pump':
-            raise NotSupportedByDevice()
+            # Fixed speed pump is not supported, so set guess a curve from the duty value given
+            # less than 50 == quiet (0), less than 80 == balanced (1), greater than 80 == proformance (2)
+            # arbitrary values are arbitrary.
+            # The values used for duty come from  OCL, but they way they build the enum used is not 100% clear
+            if duty < 50:
+                duty = 0
+            elif duty < 80:
+                duty = 1
+            else:
+                duty = 2
+            self._write([_PRO_CMD_WRITE_PUMP_MODE, duty])
+            msg = self._end_transaction_and_read(5)
+            _LOGGER.debug('pump speed response %s', ' '.join(format(i, '02x') for i in msg))
+            if(msg[0] != _PRO_CMD_WRITE_PUMP_MODE or msg[1] != 0x12 or msg[2] != 0x34):
+                raise ValueError('bad response on pump mode for CorsairAsetekPro')
+            # OCL Reads the mode after setting it, so do the same
+            self._write([_PRO_CMD_READ_PUMP_MODE])
+            self._end_transaction_and_read(4)
         else:
             raise KeyError(f'Unknow channel: {channel}')
 
